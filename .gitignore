@@ -1,0 +1,13 @@
+# Go
+backend/server.exe
+backend/server
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Node
+frontend/node_modules/
+frontend/dist/
+.DS_Store
+*.log
