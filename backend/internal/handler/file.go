@@ -6,6 +6,8 @@ import (
 	"encoding/hex"
 	"fmt"
 	"net/http"
+	"net/url"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -15,6 +17,13 @@ import (
 	"qr-file-hub/backend/internal/config"
 	"qr-file-hub/backend/internal/model"
 	"qr-file-hub/backend/internal/service"
+)
+
+const (
+	maxUploadFileSize   = 100 * 1024 * 1024
+	maxMarkdownSize     = 512 * 1024
+	maxMarkdownTitleLen = 128
+	maxTargetUrlLen     = 2048
 )
 
 type FileHandler struct {
@@ -52,7 +61,7 @@ func calculateExpireAt(expireType string, customSeconds int64) *time.Time {
 	case "30d":
 		expireAt = now.Add(30 * 24 * time.Hour)
 	case "custom":
-		if customSeconds > 0 {
+		if customSeconds > 0 && customSeconds <= 365*24*3600 {
 			expireAt = now.Add(time.Duration(customSeconds) * time.Second)
 		} else {
 			return nil
@@ -74,8 +83,23 @@ func (h *FileHandler) InitUpload(c *gin.Context) {
 		return
 	}
 
+	cleanName := filepath.Base(strings.TrimSpace(req.FileName))
+	if cleanName == "." || cleanName == "/" || cleanName == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "非法文件名"})
+		return
+	}
+
+	if len(cleanName) > 200 {
+		cleanName = cleanName[:200]
+	}
+
+	if req.FileSize > maxUploadFileSize {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "文件过大，单文件上传限制最大为 100MB"})
+		return
+	}
+
 	fileID := generateRandomID(8)
-	safeName := strings.ReplaceAll(req.FileName, " ", "_")
+	safeName := strings.ReplaceAll(cleanName, " ", "_")
 	r2Key := fmt.Sprintf("uploads/%s/%s", fileID, safeName)
 
 	mimeType := req.MimeType
@@ -113,11 +137,27 @@ func (h *FileHandler) CompleteUpload(c *gin.Context) {
 		return
 	}
 
+	expectedPrefix := fmt.Sprintf("uploads/%s/", req.FileID)
+	if !strings.HasPrefix(req.R2Key, expectedPrefix) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "非法资源存储标识"})
+		return
+	}
+
+	if req.FileSize > maxUploadFileSize {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "文件超出系统上限"})
+		return
+	}
+
+	cleanName := filepath.Base(strings.TrimSpace(req.FileName))
+	if cleanName == "." || cleanName == "/" || cleanName == "" {
+		cleanName = "uploaded_file"
+	}
+
 	expireAt := calculateExpireAt(req.ExpireType, req.CustomSeconds)
 
 	asset := model.FileAsset{
 		FileID:        req.FileID,
-		FileName:      req.FileName,
+		FileName:      cleanName,
 		FileSize:      req.FileSize,
 		MimeType:      req.MimeType,
 		R2Key:         req.R2Key,
@@ -165,13 +205,22 @@ func (h *FileHandler) CreateMarkdown(c *gin.Context) {
 		return
 	}
 
+	if len(req.Content) > maxMarkdownSize {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Markdown 内容过大，单次最大限制为 512KB"})
+		return
+	}
+
 	title := strings.TrimSpace(req.Title)
+	if len(title) > maxMarkdownTitleLen {
+		title = title[:maxMarkdownTitleLen]
+	}
 	if title == "" {
 		title = fmt.Sprintf("Markdown_%s.md", time.Now().Format("20060102_150405"))
 	}
 	if !strings.HasSuffix(strings.ToLower(title), ".md") {
 		title = title + ".md"
 	}
+	title = filepath.Base(title)
 
 	fileID := generateRandomID(8)
 	r2Key := fmt.Sprintf("markdown/%s/%s", fileID, title)
@@ -230,9 +279,35 @@ func (h *FileHandler) CreateUrl(c *gin.Context) {
 		return
 	}
 
+	rawTarget := strings.TrimSpace(req.TargetURL)
+	if len(rawTarget) > maxTargetUrlLen {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "目标网址过长"})
+		return
+	}
+
+	parsed, err := url.ParseRequestURI(rawTarget)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "无效的网址格式"})
+		return
+	}
+
+	scheme := strings.ToLower(parsed.Scheme)
+	if scheme != "http" && scheme != "https" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "仅支持以 http:// 或 https:// 开头的网址"})
+		return
+	}
+
+	if parsed.Host == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "网址必须包含有效的主机名"})
+		return
+	}
+
 	title := strings.TrimSpace(req.Title)
+	if len(title) > maxMarkdownTitleLen {
+		title = title[:maxMarkdownTitleLen]
+	}
 	if title == "" {
-		title = req.TargetURL
+		title = rawTarget
 	}
 
 	fileID := generateRandomID(8)
@@ -241,7 +316,7 @@ func (h *FileHandler) CreateUrl(c *gin.Context) {
 	asset := model.FileAsset{
 		FileID:       fileID,
 		FileName:     title,
-		TargetURL:    req.TargetURL,
+		TargetURL:    rawTarget,
 		Mode:         "url",
 		BridgeDomain: req.BridgeDomain,
 		ExpireType:   req.ExpireType,

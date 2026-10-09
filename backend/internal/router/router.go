@@ -1,22 +1,68 @@
 package router
 
 import (
+	"net/http"
+	"sync"
 	"time"
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 
 	"qr-file-hub/backend/internal/config"
 	"qr-file-hub/backend/internal/handler"
 	"qr-file-hub/backend/internal/service"
-	"gorm.io/gorm"
 )
+
+type rateLimiter struct {
+	sync.Mutex
+	requests map[string][]time.Time
+	limit    int
+	window   time.Duration
+}
+
+func newRateLimiter(limit int, window time.Duration) *rateLimiter {
+	return &rateLimiter{
+		requests: make(map[string][]time.Time),
+		limit:    limit,
+		window:   window,
+	}
+}
+
+func (rl *rateLimiter) Middleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		ip := c.ClientIP()
+		rl.Lock()
+		now := time.Now()
+		cutoff := now.Add(-rl.window)
+		var valid []time.Time
+		for _, t := range rl.requests[ip] {
+			if t.After(cutoff) {
+				valid = append(valid, t)
+			}
+		}
+		if len(valid) >= rl.limit {
+			rl.requests[ip] = valid
+			rl.Unlock()
+			c.AbortWithStatusJSON(http.StatusTooManyRequests, gin.H{"error": "请求过于频繁，请稍后再试"})
+			return
+		}
+		rl.requests[ip] = append(valid, now)
+		rl.Unlock()
+		c.Next()
+	}
+}
 
 func SetupRouter(cfg *config.Config, db *gorm.DB, storage *service.StorageService, bridge *service.BridgeService) *gin.Engine {
 	r := gin.Default()
 
 	corsConfig := cors.Config{
-		AllowAllOrigins:  true,
+		AllowOrigins: []string{
+			"https://qr.k52h.cc",
+			"https://qr-file-hub.pages.dev",
+			"http://localhost:3000",
+			"http://127.0.0.1:3000",
+		},
 		AllowMethods:     []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
 		AllowHeaders:     []string{"Origin", "Content-Type", "Accept", "Authorization", "X-Requested-With"},
 		ExposeHeaders:    []string{"Content-Length", "Content-Disposition"},
@@ -28,6 +74,8 @@ func SetupRouter(cfg *config.Config, db *gorm.DB, storage *service.StorageServic
 	fileH := handler.NewFileHandler(cfg, db, storage, bridge)
 	adminH := handler.NewAdminHandler(cfg, db, storage, bridge)
 
+	creationLimiter := newRateLimiter(60, time.Minute)
+
 	r.GET("/health", func(c *gin.Context) {
 		c.JSON(200, gin.H{"status": "ok", "service": "qr-file-hub-backend"})
 	})
@@ -38,10 +86,10 @@ func SetupRouter(cfg *config.Config, db *gorm.DB, storage *service.StorageServic
 			c.JSON(200, gin.H{"status": "ok"})
 		})
 
-		api.POST("/upload/presign", fileH.InitUpload)
+		api.POST("/upload/presign", creationLimiter.Middleware(), fileH.InitUpload)
 		api.POST("/upload/complete", fileH.CompleteUpload)
-		api.POST("/markdown/create", fileH.CreateMarkdown)
-		api.POST("/url/create", fileH.CreateUrl)
+		api.POST("/markdown/create", creationLimiter.Middleware(), fileH.CreateMarkdown)
+		api.POST("/url/create", creationLimiter.Middleware(), fileH.CreateUrl)
 
 		api.GET("/share/:fileId", fileH.GetShareInfo)
 		api.GET("/share/:fileId/download", fileH.DownloadFile)

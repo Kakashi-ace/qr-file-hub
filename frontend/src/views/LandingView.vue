@@ -112,7 +112,12 @@ async function fetchFile() {
     file.value = res.data
 
     if (file.value.mode === 'url' && file.value.target_url) {
-      window.location.href = file.value.target_url
+      const target = file.value.target_url.trim()
+      if (/^https?:\/\//i.test(target)) {
+        window.location.href = target
+        return
+      }
+      error.value = '非法的目标网址协议'
       return
     }
   } catch (err: any) {

@@ -2,9 +2,12 @@ package handler
 
 import (
 	"context"
+	"crypto/subtle"
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -16,11 +19,50 @@ import (
 	"qr-file-hub/backend/internal/service"
 )
 
+type loginLimiter struct {
+	sync.Mutex
+	attempts map[string][]time.Time
+}
+
+func newLoginLimiter() *loginLimiter {
+	return &loginLimiter{
+		attempts: make(map[string][]time.Time),
+	}
+}
+
+func (l *loginLimiter) Allow(ip string) bool {
+	l.Lock()
+	defer l.Unlock()
+	now := time.Now()
+	cutoff := now.Add(-15 * time.Minute)
+	var valid []time.Time
+	for _, t := range l.attempts[ip] {
+		if t.After(cutoff) {
+			valid = append(valid, t)
+		}
+	}
+	l.attempts[ip] = valid
+	return len(valid) < 5
+}
+
+func (l *loginLimiter) RecordFail(ip string) {
+	l.Lock()
+	defer l.Unlock()
+	l.attempts[ip] = append(l.attempts[ip], time.Now())
+}
+
+func (l *loginLimiter) Reset(ip string) {
+	l.Lock()
+	defer l.Unlock()
+	delete(l.attempts, ip)
+}
+
 type AdminHandler struct {
 	cfg     *config.Config
 	db      *gorm.DB
 	storage *service.StorageService
 	bridge  *service.BridgeService
+	limiter *loginLimiter
 }
 
 func NewAdminHandler(cfg *config.Config, db *gorm.DB, storage *service.StorageService, bridge *service.BridgeService) *AdminHandler {
@@ -29,6 +71,7 @@ func NewAdminHandler(cfg *config.Config, db *gorm.DB, storage *service.StorageSe
 		db:      db,
 		storage: storage,
 		bridge:  bridge,
+		limiter: newLoginLimiter(),
 	}
 }
 
@@ -41,10 +84,19 @@ func (h *AdminHandler) Login(c *gin.Context) {
 		return
 	}
 
-	if req.Password != h.cfg.AdminPassword {
+	clientIP := c.ClientIP()
+	if !h.limiter.Allow(clientIP) {
+		c.JSON(http.StatusTooManyRequests, gin.H{"error": "密码错误次数过多，请 15 分钟后再试"})
+		return
+	}
+
+	if subtle.ConstantTimeCompare([]byte(req.Password), []byte(h.cfg.AdminPassword)) != 1 {
+		h.limiter.RecordFail(clientIP)
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "管理密码错误"})
 		return
 	}
+
+	h.limiter.Reset(clientIP)
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
 		"role": "admin",
@@ -72,6 +124,9 @@ func (h *AdminHandler) AuthMiddleware() gin.HandlerFunc {
 
 		tokenStr := strings.TrimPrefix(authHeader, "Bearer ")
 		token, err := jwt.Parse(tokenStr, func(token *jwt.Token) (interface{}, error) {
+			if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+				return nil, fmt.Errorf("unexpected signing method")
+			}
 			return []byte(h.cfg.JWTSecret), nil
 		})
 
@@ -260,6 +315,11 @@ func (h *AdminHandler) CreateBridge(c *gin.Context) {
 	domain := strings.TrimSpace(req.Domain)
 	if !strings.HasPrefix(domain, "http://") && !strings.HasPrefix(domain, "https://") {
 		domain = "https://" + domain
+	}
+
+	if !h.bridge.IsSafeURL(domain) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "非法或禁止的跳板地址"})
+		return
 	}
 
 	bridge := model.Bridge{

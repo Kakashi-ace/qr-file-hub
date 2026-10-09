@@ -1,6 +1,7 @@
 package config
 
 import (
+	"log"
 	"os"
 )
 
@@ -25,22 +26,22 @@ func Load() *Config {
 
 	dsn := os.Getenv("DATABASE_DSN")
 	if dsn == "" {
-		dsn = "VYMxcUs7ZvJpiXQ.root:AG251314@tcp(gateway01.ap-southeast-1.prod.aws.tidbcloud.com:4000)/test?charset=utf8mb4&parseTime=True&loc=Local&tls=true"
+		log.Fatal("DATABASE_DSN environment variable is required")
 	}
 
 	accountID := os.Getenv("R2_ACCOUNT_ID")
 	if accountID == "" {
-		accountID = "518575a1761a9b2559753fa14343683b"
+		log.Fatal("R2_ACCOUNT_ID environment variable is required")
 	}
 
 	keyID := os.Getenv("R2_ACCESS_KEY_ID")
 	if keyID == "" {
-		keyID = "f24c876ba30372d30157531bc8ea89e2"
+		log.Fatal("R2_ACCESS_KEY_ID environment variable is required")
 	}
 
 	keySecret := os.Getenv("R2_ACCESS_KEY_SECRET")
 	if keySecret == "" {
-		keySecret = "9fea391ff1c4d8fdc0359b114c97a5470d4d725facd4809c6f2be46895418c1f"
+		log.Fatal("R2_ACCESS_KEY_SECRET environment variable is required")
 	}
 
 	bucket := os.Getenv("R2_BUCKET")
@@ -50,22 +51,22 @@ func Load() *Config {
 
 	endpoint := os.Getenv("R2_ENDPOINT")
 	if endpoint == "" {
-		endpoint = "https://518575a1761a9b2559753fa14343683b.r2.cloudflarestorage.com"
+		endpoint = "https://" + accountID + ".r2.cloudflarestorage.com"
 	}
 
 	publicDomain := os.Getenv("R2_PUBLIC_DOMAIN")
 	if publicDomain == "" {
-		publicDomain = "https://share.k52h.cc"
+		publicDomain = "https://qr.k52h.cc"
 	}
 
 	adminPwd := os.Getenv("ADMIN_PASSWORD")
 	if adminPwd == "" {
-		adminPwd = "AG251314"
+		log.Fatal("ADMIN_PASSWORD environment variable is required")
 	}
 
 	jwtSecret := os.Getenv("JWT_SECRET")
 	if jwtSecret == "" {
-		jwtSecret = "AG251314_SECURE_TOKEN_KEY_987654321"
+		log.Fatal("JWT_SECRET environment variable is required")
 	}
 
 	return &Config{
