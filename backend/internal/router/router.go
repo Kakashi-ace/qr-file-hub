@@ -71,6 +71,7 @@ func SetupRouter(cfg *config.Config, db *gorm.DB, storage *service.StorageServic
 	}
 	r.Use(cors.New(corsConfig))
 
+	authH := handler.NewAuthHandler(cfg, db)
 	fileH := handler.NewFileHandler(cfg, db, storage, bridge)
 	adminH := handler.NewAdminHandler(cfg, db, storage, bridge)
 
@@ -86,21 +87,31 @@ func SetupRouter(cfg *config.Config, db *gorm.DB, storage *service.StorageServic
 			c.JSON(200, gin.H{"status": "ok"})
 		})
 
-		api.POST("/upload/presign", creationLimiter.Middleware(), fileH.InitUpload)
-		api.POST("/upload/complete", fileH.CompleteUpload)
-		api.POST("/markdown/create", creationLimiter.Middleware(), fileH.CreateMarkdown)
-		api.POST("/url/create", creationLimiter.Middleware(), fileH.CreateUrl)
+		auth := api.Group("/auth")
+		{
+			auth.POST("/login", authH.Login)
+			auth.GET("/me", authH.AuthMiddleware(), authH.GetMe)
+		}
 
 		api.GET("/share/:fileId", fileH.GetShareInfo)
 		api.GET("/share/:fileId/download", fileH.DownloadFile)
 		api.GET("/bridges", fileH.GetBridges)
 
+		protected := api.Group("")
+		protected.Use(authH.AuthMiddleware())
+		{
+			protected.POST("/upload/presign", creationLimiter.Middleware(), fileH.InitUpload)
+			protected.POST("/upload/complete", fileH.CompleteUpload)
+			protected.POST("/markdown/create", creationLimiter.Middleware(), fileH.CreateMarkdown)
+			protected.POST("/url/create", creationLimiter.Middleware(), fileH.CreateUrl)
+		}
+
 		admin := api.Group("/admin")
 		{
-			admin.POST("/login", adminH.Login)
+			admin.POST("/login", authH.Login)
 
 			authed := admin.Group("")
-			authed.Use(adminH.AuthMiddleware())
+			authed.Use(authH.AuthMiddleware(), authH.AdminOnlyMiddleware())
 			{
 				authed.GET("/check", adminH.CheckAuth)
 				authed.GET("/stats", adminH.GetStats)

@@ -342,11 +342,13 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import Navbar from '@/components/Navbar.vue'
 import ModalQr from '@/components/ModalQr.vue'
 import ProgressModal from '@/components/ProgressModal.vue'
-import { apiClient, FileItem, BridgeItem, AdminStats } from '@/api/client'
+import { apiClient, getAuthToken, clearAuthToken, FileItem, BridgeItem, AdminStats } from '@/api/client'
 
+const router = useRouter()
 const isAuthenticated = ref(false)
 const loginPassword = ref('')
 const isLoggingIn = ref(false)
@@ -428,20 +430,25 @@ async function handleLogin() {
 }
 
 function handleLogout() {
-  localStorage.removeItem('qr_admin_token')
+  clearAuthToken()
   isAuthenticated.value = false
+  router.push('/login')
 }
 
 async function checkAuthStatus() {
-  const token = localStorage.getItem('qr_admin_token')
-  if (!token) return
+  const token = getAuthToken()
+  if (!token) {
+    router.push('/login?redirect=/admin')
+    return
+  }
   try {
     await apiClient.get('/admin/check')
     isAuthenticated.value = true
     await loadAdminData()
   } catch (err) {
-    localStorage.removeItem('qr_admin_token')
+    clearAuthToken()
     isAuthenticated.value = false
+    router.push('/login?redirect=/admin')
   }
 }
 

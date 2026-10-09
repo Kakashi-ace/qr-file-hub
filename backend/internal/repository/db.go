@@ -5,6 +5,7 @@ import (
 	"time"
 
 	driverMysql "github.com/go-sql-driver/mysql"
+	"golang.org/x/crypto/bcrypt"
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
@@ -17,8 +18,7 @@ var DB *gorm.DB
 
 func InitDB(cfg *config.Config) (*gorm.DB, error) {
 	_ = driverMysql.RegisterTLSConfig("tidb", &tls.Config{
-		MinVersion:         tls.VersionTLS12,
-		InsecureSkipVerify: true,
+		MinVersion: tls.VersionTLS12,
 	})
 
 	gormConfig := &gorm.Config{
@@ -39,8 +39,24 @@ func InitDB(cfg *config.Config) (*gorm.DB, error) {
 	sqlDB.SetMaxOpenConns(50)
 	sqlDB.SetConnMaxLifetime(time.Hour)
 
-	if err := db.AutoMigrate(&model.FileAsset{}, &model.Bridge{}, &model.AccessLog{}); err != nil {
+	if err := db.AutoMigrate(&model.User{}, &model.FileAsset{}, &model.Bridge{}, &model.AccessLog{}); err != nil {
 		return nil, err
+	}
+
+	var adminCount int64
+	db.Model(&model.User{}).Where("username = ?", "admin").Count(&adminCount)
+	if adminCount == 0 {
+		hash, err := bcrypt.GenerateFromPassword([]byte(cfg.AdminPassword), bcrypt.DefaultCost)
+		if err == nil {
+			adminUser := model.User{
+				Username:     "admin",
+				PasswordHash: string(hash),
+				Role:         "admin",
+				CreatedAt:    time.Now(),
+				UpdatedAt:    time.Now(),
+			}
+			db.Create(&adminUser)
+		}
 	}
 
 	var bridgeCount int64
@@ -56,16 +72,6 @@ func InitDB(cfg *config.Config) (*gorm.DB, error) {
 				WeChatStatus:  "normal",
 				QQStatus:      "normal",
 				LatencyMs:     68,
-				LastCheckedAt: &now,
-			},
-			{
-				Domain:        "https://kakashi-ace.github.io/bridge-v4zahz/",
-				IsActive:      true,
-				IsPrimary:     false,
-				IsCustom:      false,
-				WeChatStatus:  "normal",
-				QQStatus:      "normal",
-				LatencyMs:     75,
 				LastCheckedAt: &now,
 			},
 		}

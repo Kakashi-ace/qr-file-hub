@@ -155,6 +155,13 @@ func (h *FileHandler) CompleteUpload(c *gin.Context) {
 
 	expireAt := calculateExpireAt(req.ExpireType, req.CustomSeconds)
 
+	uploader := "admin"
+	if u, exists := c.Get("username"); exists && u != nil {
+		if s, ok := u.(string); ok && s != "" {
+			uploader = s
+		}
+	}
+
 	asset := model.FileAsset{
 		FileID:        req.FileID,
 		FileName:      cleanName,
@@ -166,6 +173,7 @@ func (h *FileHandler) CompleteUpload(c *gin.Context) {
 		BridgeDomain:  req.BridgeDomain,
 		ExpireType:    req.ExpireType,
 		ExpireAt:      expireAt,
+		CreatedBy:     uploader,
 		CreatedAt:     time.Now(),
 		UpdatedAt:     time.Now(),
 	}
@@ -229,6 +237,13 @@ func (h *FileHandler) CreateMarkdown(c *gin.Context) {
 
 	expireAt := calculateExpireAt(req.ExpireType, req.CustomSeconds)
 
+	uploader := "admin"
+	if u, exists := c.Get("username"); exists && u != nil {
+		if s, ok := u.(string); ok && s != "" {
+			uploader = s
+		}
+	}
+
 	asset := model.FileAsset{
 		FileID:        fileID,
 		FileName:      title,
@@ -241,6 +256,7 @@ func (h *FileHandler) CreateMarkdown(c *gin.Context) {
 		BridgeDomain:  req.BridgeDomain,
 		ExpireType:    req.ExpireType,
 		ExpireAt:      expireAt,
+		CreatedBy:     uploader,
 		CreatedAt:     time.Now(),
 		UpdatedAt:     time.Now(),
 	}
@@ -313,6 +329,13 @@ func (h *FileHandler) CreateUrl(c *gin.Context) {
 	fileID := generateRandomID(8)
 	expireAt := calculateExpireAt(req.ExpireType, req.CustomSeconds)
 
+	uploader := "admin"
+	if u, exists := c.Get("username"); exists && u != nil {
+		if s, ok := u.(string); ok && s != "" {
+			uploader = s
+		}
+	}
+
 	asset := model.FileAsset{
 		FileID:       fileID,
 		FileName:     title,
@@ -321,6 +344,7 @@ func (h *FileHandler) CreateUrl(c *gin.Context) {
 		BridgeDomain: req.BridgeDomain,
 		ExpireType:   req.ExpireType,
 		ExpireAt:     expireAt,
+		CreatedBy:    uploader,
 		CreatedAt:    time.Now(),
 		UpdatedAt:    time.Now(),
 	}

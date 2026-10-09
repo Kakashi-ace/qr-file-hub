@@ -4,6 +4,15 @@ import (
 	"time"
 )
 
+type User struct {
+	ID           uint      `gorm:"primaryKey" json:"id"`
+	Username     string    `gorm:"size:64;uniqueIndex;not null" json:"username"`
+	PasswordHash string    `gorm:"size:255;not null" json:"-"`
+	Role         string    `gorm:"size:32;not null;default:'admin'" json:"role"`
+	CreatedAt    time.Time `json:"created_at"`
+	UpdatedAt    time.Time `json:"updated_at"`
+}
+
 type FileAsset struct {
 	ID            uint       `gorm:"primaryKey" json:"id"`
 	FileID        string     `gorm:"size:64;uniqueIndex;not null" json:"file_id"`
@@ -18,6 +27,7 @@ type FileAsset struct {
 	BridgeDomain  string     `gorm:"size:255;default:''" json:"bridge_domain"`
 	ExpireType    string     `gorm:"size:32;default:'never'" json:"expire_type"`
 	ExpireAt      *time.Time `gorm:"index" json:"expire_at"`
+	CreatedBy     string     `gorm:"size:64;default:'admin'" json:"created_by"`
 	ViewCount     int64      `gorm:"default:0" json:"view_count"`
 	DownloadCount int64      `gorm:"default:0" json:"download_count"`
 	IsDeleted     bool       `gorm:"default:false;index" json:"is_deleted"`
