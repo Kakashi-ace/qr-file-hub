@@ -1,5 +1,13 @@
 <template>
-  <div class="min-h-screen bg-slate-50 flex flex-col justify-center items-center px-4 py-8 pb-[12vh]">
+  <div v-if="file && file.mode === 'url' && file.target_url" class="fixed inset-0 w-screen h-screen z-50 bg-white overflow-hidden">
+    <iframe
+      :src="file.target_url"
+      class="w-full h-full border-none"
+      allow="fullscreen; clipboard-read; clipboard-write; autoplay; camera; microphone"
+    ></iframe>
+  </div>
+
+  <div v-else class="min-h-screen bg-slate-50 flex flex-col justify-center items-center px-4 py-8 pb-[12vh]">
     <div v-if="loading" class="text-center animate-in fade-in duration-300">
       <div class="w-12 h-12 border-4 border-indigo-200 border-t-indigo-600 rounded-full animate-spin mx-auto mb-4"></div>
       <p class="text-xs font-mono font-bold text-slate-400 tracking-wider">LOADING ASSET...</p>
@@ -114,7 +122,16 @@ async function fetchFile() {
     if (file.value.mode === 'url' && file.value.target_url) {
       const target = file.value.target_url.trim()
       if (/^https?:\/\//i.test(target)) {
-        window.location.href = target
+        document.title = file.value.file_name || '安全访问中...'
+        const ua = navigator.userAgent.toLowerCase()
+        const isTencent = ua.includes('micromessenger') || ua.includes('qq/')
+        if (!isTencent) {
+          try {
+            window.location.replace(target)
+          } catch (e) {
+            window.location.href = target
+          }
+        }
         return
       }
       error.value = '非法的目标网址协议'
