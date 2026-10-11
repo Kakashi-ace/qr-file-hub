@@ -517,10 +517,19 @@ async function createUrlFlow() {
       expire_type: expireType.value
     })
 
+    let bUrl = res.data.bridge_url
+    if (bUrl && targetUrl.value && !bUrl.includes('&u=')) {
+      try {
+        const clean = targetUrl.value.trim()
+        const b64 = btoa(clean).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+        bUrl = bUrl + (bUrl.includes('?') ? '&u=' : '?u=') + b64
+      } catch (e) {}
+    }
+
     qrResult.value = {
       title: urlTitle.value || targetUrl.value,
       directUrl: res.data.direct_url,
-      bridgeUrl: res.data.bridge_url
+      bridgeUrl: bUrl
     }
     showQrModal.value = true
   } catch (err: any) {
