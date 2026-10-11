@@ -518,11 +518,11 @@ async function createUrlFlow() {
     })
 
     let bUrl = res.data.bridge_url
-    if (bUrl && targetUrl.value && !bUrl.includes('&u=')) {
+    if (bUrl && targetUrl.value && !bUrl.includes('&c=') && !bUrl.includes('?c=')) {
       try {
         const clean = targetUrl.value.trim()
         const b64 = btoa(clean).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
-        bUrl = bUrl + (bUrl.includes('?') ? '&u=' : '?u=') + b64
+        bUrl = bUrl + (bUrl.includes('?') ? '&c=' : '?c=') + b64
       } catch (e) {}
     }
 

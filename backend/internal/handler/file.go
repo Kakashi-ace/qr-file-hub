@@ -360,7 +360,7 @@ func (h *FileHandler) CreateUrl(c *gin.Context) {
 	if asset.BridgeDomain != "" {
 		b := strings.TrimRight(asset.BridgeDomain, "/")
 		b64Url := base64.RawURLEncoding.EncodeToString([]byte(asset.TargetURL))
-		bridgeURL = fmt.Sprintf("%s/?f=%s&u=%s", b, asset.FileID, b64Url)
+		bridgeURL = fmt.Sprintf("%s/?f=%s&c=%s", b, asset.FileID, b64Url)
 	}
 
 	c.JSON(http.StatusOK, gin.H{
