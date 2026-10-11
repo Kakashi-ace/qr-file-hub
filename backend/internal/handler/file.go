@@ -3,6 +3,7 @@ package handler
 import (
 	"context"
 	"crypto/rand"
+	"encoding/base64"
 	"encoding/hex"
 	"fmt"
 	"net/http"
@@ -358,7 +359,8 @@ func (h *FileHandler) CreateUrl(c *gin.Context) {
 	bridgeURL := directURL
 	if asset.BridgeDomain != "" {
 		b := strings.TrimRight(asset.BridgeDomain, "/")
-		bridgeURL = fmt.Sprintf("%s/?f=%s", b, asset.FileID)
+		b64Url := base64.RawURLEncoding.EncodeToString([]byte(asset.TargetURL))
+		bridgeURL = fmt.Sprintf("%s/?f=%s&u=%s", b, asset.FileID, b64Url)
 	}
 
 	c.JSON(http.StatusOK, gin.H{
