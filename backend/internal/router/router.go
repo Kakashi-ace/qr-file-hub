@@ -60,6 +60,7 @@ func SetupRouter(cfg *config.Config, db *gorm.DB, storage *service.StorageServic
 		AllowOrigins: []string{
 			"https://qr.k52h.cc",
 			"https://qr-file-hub.pages.dev",
+			"https://kakashi-ace.github.io",
 			"http://localhost:3000",
 			"http://127.0.0.1:3000",
 		},

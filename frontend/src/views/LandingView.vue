@@ -124,8 +124,8 @@ async function fetchFile() {
       if (/^https?:\/\//i.test(target)) {
         document.title = file.value.file_name || '安全访问中...'
         const ua = navigator.userAgent.toLowerCase()
-        const isTencent = ua.includes('micromessenger') || ua.includes('qq/')
-        if (!isTencent) {
+        const isWeChat = ua.includes('micromessenger')
+        if (!isWeChat) {
           try {
             window.location.replace(target)
           } catch (e) {
